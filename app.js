@@ -42,6 +42,8 @@ app.del('/users/:username', routes.users.del);
 
 app.post('/users/:username/follow', routes.users.follow);
 app.post('/users/:username/unfollow', routes.users.unfollow);
+app.post('/users/:username/ask', routes.users.ask);
+app.post('/users/:username/answer', routes.users.answer);
 
 http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening at: http://localhost:%d/', app.get('port'));

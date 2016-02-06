@@ -1,5 +1,5 @@
-// user.js
-// User model logic.
+// answer.js
+// Answer model logic.
 
 var neo4j = require('neo4j');
 var errors = require('./errors');
@@ -14,7 +14,7 @@ var db = new neo4j.GraphDatabase({
 
 // Private constructor:
 
-var User = module.exports = function User(_node) {
+var Answer = module.exports = function Answer(_node) {
     // All we'll really store is the node; the rest of our properties will be
     // derivable or just pass-through properties (see below).
     this._node = _node;
@@ -22,8 +22,8 @@ var User = module.exports = function User(_node) {
 
 // Public constants:
 
-User.VALIDATION_INFO = {
-    'username': {
+Answer.VALIDATION_INFO = {
+    'answername': {
         required: true,
         minLength: 2,
         maxLength: 16,
@@ -34,9 +34,9 @@ User.VALIDATION_INFO = {
 
 // Public instance properties:
 
-// The user's username, e.g. 'aseemk'.
-Object.defineProperty(User.prototype, 'username', {
-    get: function () { return this._node.properties['username']; }
+// The answer's answername, e.g. 'aseemk'.
+Object.defineProperty(Answer.prototype, 'answername', {
+    get: function () { return this._node.properties['answername']; }
 });
 
 // Private helpers:
@@ -44,13 +44,13 @@ Object.defineProperty(User.prototype, 'username', {
 // Takes the given caller-provided properties, selects only known ones,
 // validates them, and returns the known subset.
 // By default, only validates properties that are present.
-// (This allows `User.prototype.patch` to not require any.)
+// (This allows `Answer.prototype.patch` to not require any.)
 // You can pass `true` for `required` to validate that all required properties
-// are present too. (Useful for `User.create`.)
+// are present too. (Useful for `Answer.create`.)
 function validate(props, required) {
     var safeProps = {};
 
-    for (var prop in User.VALIDATION_INFO) {
+    for (var prop in Answer.VALIDATION_INFO) {
         var val = props[prop];
         validateProp(prop, val, required);
         safeProps[prop] = val;
@@ -63,7 +63,7 @@ function validate(props, required) {
 // By default, ignores null/undefined/empty values, but you can pass `true` for
 // the `required` param to enforce that any required properties are present.
 function validateProp(prop, val, required) {
-    var info = User.VALIDATION_INFO[prop];
+    var info = Answer.VALIDATION_INFO[prop];
     var message = info.message;
 
     if (!val) {
@@ -98,19 +98,19 @@ function isConstraintViolation(err) {
 
 // Public instance methods:
 
-// Atomically updates this user, both locally and remotely in the db, with the
+// Atomically updates this answer, both locally and remotely in the db, with the
 // given property updates.
-User.prototype.patch = function (props, callback) {
+Answer.prototype.patch = function (props, callback) {
     var safeProps = validate(props);
 
     var query = [
-        'MATCH (user:User {username: {username}})',
-        'SET user += {props}',
-        'RETURN user',
+        'MATCH (answer:Answer {answername: {answername}})',
+        'SET answer += {props}',
+        'RETURN answer',
     ].join('\n');
 
     var params = {
-        username: this.username,
+        answername: this.answername,
         props: safeProps,
     };
 
@@ -121,41 +121,41 @@ User.prototype.patch = function (props, callback) {
         params: params,
     }, function (err, results) {
         if (isConstraintViolation(err)) {
-            // TODO: This assumes username is the only relevant constraint.
+            // TODO: This assumes answername is the only relevant constraint.
             // We could parse the constraint property out of the error message,
             // but it'd be nicer if Neo4j returned this data semantically.
             // Alternately, we could tweak our query to explicitly check first
-            // whether the username is taken or not.
+            // whether the answername is taken or not.
             err = new errors.ValidationError(
-                'The username ‘' + props.username + '’ is taken.');
+                'The answername ‘' + props.answername + '’ is taken.');
         }
         if (err) return callback(err);
 
         if (!results.length) {
-            err = new Error('User has been deleted! Username: ' + self.username);
+            err = new Error('Answer has been deleted! Answername: ' + self.answername);
             return callback(err);
         }
 
         // Update our node with this updated+latest data from the server:
-        self._node = results[0]['user'];
+        self._node = results[0]['answer'];
 
         callback(null);
     });
 };
 
-User.prototype.del = function (callback) {
-    // Use a Cypher query to delete both this user and his/her following
+Answer.prototype.del = function (callback) {
+    // Use a Cypher query to delete both this answer and his/her following
     // relationships in one query and one network request:
     // (Note that this'll still fail if there are any relationships attached
     // of any other types, which is good because we don't expect any.)
     var query = [
-        'MATCH (user:User {username: {username}})',
-        'OPTIONAL MATCH (user) -[rel:follows]- (other)',
-        'DELETE user, rel',
+        'MATCH (answer:Answer {answername: {answername}})',
+        'OPTIONAL MATCH (answer) -[rel:follows]- (other)',
+        'DELETE answer, rel',
     ].join('\n')
 
     var params = {
-        username: this.username,
+        answername: this.answername,
     };
 
     db.cypher({
@@ -166,17 +166,16 @@ User.prototype.del = function (callback) {
     });
 };
 
-
-User.prototype.ask = function (question, callback) {
+Answer.prototype.follow = function (other, callback) {
     var query = [
-        'MATCH (user:User {username: {thisUsername}})',
-        'MATCH (question:Question {questionname: {questionname}})',
-        'MERGE (user) -[rel:asks]-> (question)',
+        'MATCH (answer:Answer {answername: {thisAnswername}})',
+        'MATCH (other:Answer {answername: {otherAnswername}})',
+        'MERGE (answer) -[rel:follows]-> (other)',
     ].join('\n')
 
     var params = {
-        thisUsername: this.username,
-        questionname: question.questionname,
+        thisAnswername: this.answername,
+        otherAnswername: other.answername,
     };
 
     db.cypher({
@@ -187,37 +186,17 @@ User.prototype.ask = function (question, callback) {
     });
 };
 
-User.prototype.follow = function (other, callback) {
+Answer.prototype.unfollow = function (other, callback) {
     var query = [
-        'MATCH (user:User {username: {thisUsername}})',
-        'MATCH (other:User {username: {otherUsername}})',
-        'MERGE (user) -[rel:follows]-> (other)',
-    ].join('\n')
-
-    var params = {
-        thisUsername: this.username,
-        otherUsername: other.username,
-    };
-
-    db.cypher({
-        query: query,
-        params: params,
-    }, function (err) {
-        callback(err);
-    });
-};
-
-User.prototype.unfollow = function (other, callback) {
-    var query = [
-        'MATCH (user:User {username: {thisUsername}})',
-        'MATCH (other:User {username: {otherUsername}})',
-        'MATCH (user) -[rel:follows]-> (other)',
+        'MATCH (answer:Answer {answername: {thisAnswername}})',
+        'MATCH (other:Answer {answername: {otherAnswername}})',
+        'MATCH (answer) -[rel:follows]-> (other)',
         'DELETE rel',
     ].join('\n')
 
     var params = {
-        thisUsername: this.username,
-        otherUsername: other.username,
+        thisAnswername: this.answername,
+        otherAnswername: other.answername,
     };
 
     db.cypher({
@@ -229,21 +208,21 @@ User.prototype.unfollow = function (other, callback) {
 };
 
 // Calls callback w/ (err, following, others), where following is an array of
-// users this user follows, and others is all other users minus him/herself.
-User.prototype.getFollowingAndOthers = function (callback) {
-    // Query all users and whether we follow each one or not:
+// answers this answer follows, and others is all other answers minus him/herself.
+Answer.prototype.getFollowingAndOthers = function (callback) {
+    // Query all answers and whether we follow each one or not:
     var query = [
-        'MATCH (user:User {username: {thisUsername}})',
-        'MATCH (other:User)',
-        'OPTIONAL MATCH (user) -[rel:follows]-> (other)',
+        'MATCH (answer:Answer {answername: {thisAnswername}})',
+        'MATCH (other:Answer)',
+        'OPTIONAL MATCH (answer) -[rel:follows]-> (other)',
         'RETURN other, COUNT(rel)', // COUNT(rel) is a hack for 1 or 0
     ].join('\n')
 
     var params = {
-        thisUsername: this.username,
+        thisAnswername: this.answername,
     };
 
-    var user = this;
+    var answer = this;
     db.cypher({
         query: query,
         params: params,
@@ -254,10 +233,10 @@ User.prototype.getFollowingAndOthers = function (callback) {
         var others = [];
 
         for (var i = 0; i < results.length; i++) {
-            var other = new User(results[i]['other']);
+            var other = new Answer(results[i]['other']);
             var follows = results[i]['COUNT(rel)'];
 
-            if (user.username === other.username) {
+            if (answer.answername === other.answername) {
                 continue;
             } else if (follows) {
                 following.push(other);
@@ -272,14 +251,14 @@ User.prototype.getFollowingAndOthers = function (callback) {
 
 // Static methods:
 
-User.get = function (username, callback) {
+Answer.get = function (answername, callback) {
     var query = [
-        'MATCH (user:User {username: {username}})',
-        'RETURN user',
+        'MATCH (answer:Answer {answername: {answername}})',
+        'RETURN answer',
     ].join('\n')
 
     var params = {
-        username: username,
+        answername: answername,
     };
 
     db.cypher({
@@ -288,36 +267,36 @@ User.get = function (username, callback) {
     }, function (err, results) {
         if (err) return callback(err);
         if (!results.length) {
-            err = new Error('No such user with username: ' + username);
+            err = new Error('No such answer with answername: ' + answername);
             return callback(err);
         }
-        var user = new User(results[0]['user']);
-        callback(null, user);
+        var answer = new Answer(results[0]['answer']);
+        callback(null, answer);
     });
 };
 
-User.getAll = function (callback) {
+Answer.getAll = function (callback) {
     var query = [
-        'MATCH (user:User)',
-        'RETURN user',
+        'MATCH (answer:Answer)',
+        'RETURN answer',
     ].join('\n');
 
     db.cypher({
         query: query,
     }, function (err, results) {
         if (err) return callback(err);
-        var users = results.map(function (result) {
-            return new User(result['user']);
+        var answers = results.map(function (result) {
+            return new Answer(result['answer']);
         });
-        callback(null, users);
+        callback(null, answers);
     });
 };
 
-// Creates the user and persists (saves) it to the db, incl. indexing it:
-User.create = function (props, callback) {
+// Creates the answer and persists (saves) it to the db, incl. indexing it:
+Answer.create = function (props, callback) {
     var query = [
-        'CREATE (user:User {props})',
-        'RETURN user',
+        'CREATE (answer:Answer {props})',
+        'RETURN answer',
     ].join('\n');
 
     var params = {
@@ -329,32 +308,32 @@ User.create = function (props, callback) {
         params: params,
     }, function (err, results) {
         if (isConstraintViolation(err)) {
-            // TODO: This assumes username is the only relevant constraint.
+            // TODO: This assumes answername is the only relevant constraint.
             // We could parse the constraint property out of the error message,
             // but it'd be nicer if Neo4j returned this data semantically.
             // Alternately, we could tweak our query to explicitly check first
-            // whether the username is taken or not.
+            // whether the answername is taken or not.
             err = new errors.ValidationError(
-                'The username ‘' + props.username + '’ is taken.');
+                'The answername ‘' + props.answername + '’ is taken.');
         }
         if (err) return callback(err);
-        var user = new User(results[0]['user']);
-        callback(null, user);
+        var answer = new Answer(results[0]['answer']);
+        callback(null, answer);
     });
 };
 
 // Static initialization:
 
-// Register our unique username constraint.
+// Register our unique answername constraint.
 // TODO: This is done async'ly (fire and forget) here for simplicity,
 // but this would be better as a formal schema migration script or similar.
 db.createConstraint({
-    label: 'User',
-    property: 'username',
+    label: 'Answer',
+    property: 'answername',
 }, function (err, constraint) {
     if (err) throw err;     // Failing fast for now, by crash the application.
     if (constraint) {
-        console.log('(Registered unique usernames constraint.)');
+        console.log('(Registered unique answernames constraint.)');
     } else {
         // Constraint already present; no need to log anything.
     }

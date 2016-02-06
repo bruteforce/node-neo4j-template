@@ -5,6 +5,7 @@ var URL = require('url');
 
 var errors = require('../models/errors');
 var User = require('../models/user');
+var Question = require('../models/question');
 
 function getUserURL(user) {
     return '/users/' + encodeURIComponent(user.username);
@@ -130,6 +131,7 @@ exports.follow = function (req, res, next) {
         // TODO: Gracefully handle "no such user" error somehow.
         // This is the source user, so e.g. 404 page?
         if (err) return next(err);
+
         User.get(req.body.otherUsername, function (err, other) {
             // TODO: Gracefully handle "no such user" error somehow.
             // This is the target user, so redirect back to the source user w/
@@ -147,6 +149,51 @@ exports.follow = function (req, res, next) {
  * POST /users/:username/unfollow {otherUsername}
  */
 exports.unfollow = function (req, res, next) {
+    User.get(req.params.username, function (err, user) {
+        // TODO: Gracefully handle "no such user" error somehow.
+        // This is the source user, so e.g. 404 page?
+        if (err) return next(err);
+        User.get(req.body.otherUsername, function (err, other) {
+            // TODO: Gracefully handle "no such user" error somehow.
+            // This is the target user, so redirect back to the source user w/
+            // an info message?
+            if (err) return next(err);
+            user.unfollow(other, function (err) {
+                if (err) return next(err);
+                res.redirect(getUserURL(user));
+            });
+        });
+    });
+};
+
+
+/**
+ * POST /users/:username/ask {otherUsername}
+ */
+exports.ask = function (req, res, next) {
+    User.get(req.params.username, function (err, user) {
+        // TODO: Gracefully handle "no such user" error somehow.
+        // This is the source user, so e.g. 404 page?
+        if (err) return next(err);
+
+
+        Question.create({
+            questionname: req.body._question
+        }, function (err, question) {
+            if (err) return next(err);
+            user.ask(question, function (err) {
+                if (err) return next(err);
+                res.redirect(getUserURL(user));
+            });
+        });
+
+    });
+};
+
+/**
+ * POST /users/:username/answer {otherUsername}
+ */
+exports.answer = function (req, res, next) {
     User.get(req.params.username, function (err, user) {
         // TODO: Gracefully handle "no such user" error somehow.
         // This is the source user, so e.g. 404 page?

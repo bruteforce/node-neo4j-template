@@ -48,3 +48,8 @@ block content
         p And if you're feeling destructive…
         input(type='hidden', name='_method', value='DELETE')
         input(type='submit', value='Delete User')
+
+    form(action='/users/#{user.username}/ask', method='POST', onsubmit='')
+        p Ask a Question:
+        input(type='input', name='_question', value='')
+        input(type='submit', value='Ask Me')
